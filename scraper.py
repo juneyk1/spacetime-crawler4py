@@ -2,6 +2,8 @@ import re
 from urllib.parse import urlparse, urldefrag, urljoin
 from bs4 import BeautifulSoup
 
+robotHandler = RobotHandler(); # single instance
+
 def scraper(url, resp):
     links = extract_next_links(url, resp)
     return [link for link in links if is_valid(link)]
@@ -37,12 +39,29 @@ def is_valid(url):
     valid_domains = ["ics.uci.edu", "cs.uci.edu", "informatics.uci.edu", "stat.uci.edu", "today.uci.edu/department/information_computer_sciences"]
     try:
         parsed = urlparse(url)
+
+        # scheme validation:
         if parsed.scheme not in set(["http", "https"]):
             return False
 
+        # domain validation:
+        # (special case today.uci.edu/...)
         domain = parsed.netloc
-        if not any(domain.endswith(d) for d in valid_domains):
+        if "today.uci.edu" in parsed.netloc:
+            # Only allow specific path for today.uci.edu
+            if not parsed.path.startswith("/department/information_computer_sciences/"):
+                return False
+        else:
+            # Check other domains
+            valid_domains = ["ics.uci.edu", "cs.uci.edu", "informatics.uci.edu", "stat.uci.edu"]
+            if not any(parsed.netloc.endswith(d) for d in valid_domains):
+                return False
+
+        # ensure allowed in robots.txt:
+        if not robot_handler.can_fetch(url):
             return False
+
+        # file extension validation:
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"
@@ -52,6 +71,11 @@ def is_valid(url):
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
             + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
+
+        # trap prevention:
+        
+        
+        
 
     except TypeError:
         print ("TypeError for ", parsed)
