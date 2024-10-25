@@ -1,10 +1,14 @@
 import re
 from urllib.parse import urlparse, urldefrag, urljoin
 from bs4 import BeautifulSoup
+import os
+import hashlib
 
 def scraper(url, resp):
-    links = extract_next_links(url, resp)
-    return [link for link in links if is_valid(link)]
+    if resp.status == 200:
+        save_page(url, resp.raw_response.content)
+        links = extract_next_links(url, resp)
+        return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
     links = []
@@ -56,3 +60,13 @@ def is_valid(url):
     except TypeError:
         print ("TypeError for ", parsed)
         raise
+
+def save_page(url, content):
+    save_dir = "crawled_pages"
+    os.makedirs(save_dir, exist_ok=True)
+
+    file_name = hashlib.md5(url.encode('utf-8')).hexdigest() + ".html"
+    file_path = os.path.join(save_dir, file_name)
+
+    with open(file_path, 'w', encoding='utf-8') as file:
+        file.write(content)
