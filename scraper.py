@@ -85,7 +85,7 @@ def extract_next_links(url, resp):
                     'url': url,
                     'word_count': word_count
                 })
-                print(f"New longest page found: {url} with {word_count} words")
+                print(f"New lon6gest page found: {url} with {word_count} words")
             
             # Update word frequencies (Question 3) - use filtered words
             word_counter.update(filtered_words)
@@ -94,9 +94,10 @@ def extract_next_links(url, resp):
             for link in soup.find_all('a', href=True):
                 abs_link = urljoin(url, link['href'])
                 base, fragment = urldefrag(abs_link)
-                normalized = urlparse(base).geturl().lower()
-                if is_valid(normalized) and normalized not in links and normalized not in all_urls:
-                    links.append(normalized)
+                # Remove params that lead to traps
+                cleaned_url = status.remove_traps(base)
+                if is_valid(cleaned_url) and cleaned_url not in links and cleaned_url not in all_urls:
+                    links.append(cleaned_url)
                     
         except Exception as e:
             print(f"Error processing {url}: {e}")
