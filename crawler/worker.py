@@ -18,11 +18,12 @@ class Worker(Thread):
         super().__init__(daemon=True)
         
     def run(self):
-        while True:
+        while True and not self.frontier.stop_thread.is_set():
             tbd_url = self.frontier.get_tbd_url()
             if not tbd_url:
                 self.logger.info("Frontier is empty. Stopping Crawler.")
                 break
+            self.frontier.check_domain_time(tbd_url)
             resp = download(tbd_url, self.config, self.logger)
             self.logger.info(
                 f"Downloaded {tbd_url}, status <{resp.status}>, "
@@ -31,4 +32,4 @@ class Worker(Thread):
             for scraped_url in scraped_urls:
                 self.frontier.add_url(scraped_url)
             self.frontier.mark_url_complete(tbd_url)
-            time.sleep(self.config.time_delay)
+            #time.sleep(self.config.time_delay)

@@ -1,4 +1,5 @@
 import re
+import sys
 from urllib.parse import urlparse, urldefrag, urljoin
 from bs4 import BeautifulSoup
 from collections import Counter, defaultdict
@@ -7,6 +8,8 @@ import csv
 import os
 from datetime import datetime
 import status_checks as status
+from threading import RLock
+from similarity_checker import ContentTracker
 
 # Define stop words to ignore
 STOP_WORDS = set(stopwords.words('english')) #Stopwords from nltk
@@ -20,31 +23,56 @@ longest_page = {
 }  # Question 2: Track longest page
 word_counter = Counter()  # Question 3: Track word frequencies
 subdomain_counter = defaultdict(int)  # Question 4: Track subdomains
+content_tracker = ContentTracker()
+
+lock_all_urls = RLock()
+lock_visited_urls = RLock()
+lock_longest_page = RLock()
+lock_word_counter = RLock()
+lock_subdomain_counter = RLock()
+lock_links = RLock()
 
 def scraper(url, resp):
-    """Main function to process each page and extract valid links."""
-    links = []
-    if url not in all_urls:
-        links = extract_next_links(url, resp)
-    all_urls.add(url)
-    #valid_links = [link for link in links if is_valid(link)]
-    
-    # Print current statistics periodically
-    if len(visited_urls) % 50 == 0:  # Every 50 pages
-        print("\n=== Current Statistics ===")
-        print(f"Unique pages: {len(visited_urls)}")
-        print(f"Longest page: {longest_page['url']} ({longest_page['word_count']} words)")
-        print(f"Subdomains found: {len(subdomain_counter)}")
-        print("Top 5 words so far:", word_counter.most_common(5))
-        print("========================\n")
-    
-    return links
+    try:
+        """Main function to process each page and extract valid links."""
+        links = []
+        with lock_all_urls:
+            if url not in all_urls:
+                links = extract_next_links(url, resp)
+            all_urls.add(url)
+        #valid_links = [link for link in links if is_valid(link)]
+        
+        # Print current statistics periodically
+        with lock_visited_urls:
+            if len(visited_urls) % 50 == 0:  # Every 50 pages
+                print("\n=== Current Statistics ===")
+                print(f"Unique pages: {len(visited_urls)}")
+                print(f"Longest page: {longest_page['url']} ({longest_page['word_count']} words)")
+                print(f"Subdomains found: {len(subdomain_counter)}")
+                print("Top 5 words so far:", word_counter.most_common(5))
+                print("========================\n")
+        
+        return links
+    except Exception as e:
+        save_report_data()
+        sys.exit(1)
 
 def extract_next_links(url, resp):
     """Extract links while tracking report metrics."""
     links = []
+
+    if resp.status in [301, 302, 303, 307, 308]:
+        new_link = status.handle_redirects(url, resp)
+        if new_link:
+            abs_link = urljoin(url, new_link)
+            base, fragment = urldefrag(abs_link)
+            cleaned_url = status.remove_traps(base)
+            normalized = urlparse(cleaned_url).geturl().lower() #Check this works
+            if is_valid(normalized) and normalized not in links and normalized not in all_urls:
+                with lock_links:
+                    links.append(normalized)
     
-    if resp.status == 200:
+    elif resp.status == 200:
         try:
             if(status.is_large_file(resp)):
                 return []
@@ -68,35 +96,42 @@ def extract_next_links(url, resp):
                 return []
 
             # Filter out stop words
-            filtered_words = [word for word in words if word not in STOP_WORDS] #TODO stopped deletion of chars < 2 (keep digits!)
+            filtered_words = [word for word in words if word not in STOP_WORDS and len(word) > 1] #TODO stopped deletion of chars < 2 (keep digits!)
             
             # Track unique URL (Question 1)
-            visited_urls.add(url)
+            with lock_visited_urls:
+                visited_urls.add(url)
             
             # Track subdomain (Question 4)
             parsed_url = urlparse(url)
-            if "ics.uci.edu" in parsed_url.netloc:
-                subdomain_counter[parsed_url.netloc] += 1
+            if "uci.edu" in parsed_url.netloc:
+                with lock_subdomain_counter:
+                    subdomain_counter[parsed_url.netloc] += 1
             
             # Update longest page (Question 2) - use original word count including stop words
-            word_count = len(words)  # Use original words for length
-            if word_count > longest_page['word_count']:
-                longest_page.update({
-                    'url': url,
-                    'word_count': word_count
-                })
-                print(f"New longest page found: {url} with {word_count} words")
+            word_count = len(filtered_words)  # Use original words for length
+            with lock_longest_page:
+                if word_count > longest_page['word_count']:
+                    longest_page.update({
+                        'url': url,
+                        'word_count': word_count
+                    })
+                    print(f"New longest page found: {url} with {word_count} words")
             
-            # Update word frequencies (Question 3) - use filtered words
-            word_counter.update(filtered_words)
+                # Update word frequencies (Question 3) - use filtered words
+                with lock_word_counter:
+                    word_counter.update(filtered_words)
+                    content_tracker.add_page(url, filtered_words)
             
             # Extract links
             for link in soup.find_all('a', href=True):
                 abs_link = urljoin(url, link['href'])
                 base, fragment = urldefrag(abs_link)
-                normalized = urlparse(base).geturl().lower()
+                cleaned_url = status.remove_traps(base)
+                normalized = urlparse(cleaned_url).geturl().lower()
                 if is_valid(normalized) and normalized not in links and normalized not in all_urls:
-                    links.append(normalized)
+                    with lock_links:
+                        links.append(normalized)
                     
         except Exception as e:
             print(f"Error processing {url}: {e}")
