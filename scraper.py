@@ -46,7 +46,10 @@ def extract_next_links(url, resp):
     
     if resp.status == 200:
         try:
-            if(status.is_large_file(resp)):
+            if status.is_large_file(resp):
+                return []
+
+            if status.detect_url_trap(url):
                 return []
             
             # Parse content
@@ -95,9 +98,9 @@ def extract_next_links(url, resp):
                 abs_link = urljoin(url, link['href'])
                 base, fragment = urldefrag(abs_link)
                 normalized = urlparse(base).geturl().lower()
-                if is_valid(normalized) and normalized not in links and normalized not in all_urls:
+                if is_valid(normalized) and normalized not in links and normalized not in all_urls and not status.detect_url_trap(normalized)):
                     links.append(normalized)
-                    
+
         except Exception as e:
             print(f"Error processing {url}: {e}")
     return links
@@ -161,13 +164,18 @@ def is_valid(url):
         if parsed.scheme not in {'http', 'https'}:
             return False
 
-        if not any(domain in parsed.netloc for domain in [
-            "ics.uci.edu", 
-            "cs.uci.edu", 
-            "informatics.uci.edu", 
-            "stat.uci.edu"
-        ]):
-            return False
+        # domain validation:
+        # (special case today.uci.edu/...)
+        domain = parsed.netloc
+        if "today.uci.edu" in parsed.netloc:
+            # Only allow specific path for today.uci.edu
+            if not parsed.path.startswith("/department/information_computer_sciences/"):
+                return False
+        else:
+            # Check other domains
+            valid_domains = ["ics.uci.edu", "cs.uci.edu", "informatics.uci.edu", "stat.uci.edu"]
+            if not any(parsed.netloc.endswith(d) for d in valid_domains):
+                return False
 
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
