@@ -15,6 +15,7 @@ class Frontier(object):
         self.config = config
         self.to_be_downloaded = list()
         self.lock = RLock()
+        self.locktime = RLock()
         self.subdomain_vists = {}
         self.stop_thread = Event()
         
@@ -57,7 +58,6 @@ class Frontier(object):
             try:
                 return self.to_be_downloaded.pop()
             except IndexError:
-                self.stop_thread.set()
                 return None
 
     def add_url(self, url):
@@ -87,5 +87,6 @@ class Frontier(object):
                 curr_time = time.time() - self.subdomain_vists[subdomain]
                 if curr_time < self.config.time_delay:
                     sleep = self.config.time_delay - curr_time
-                    time.sleep(sleep)
-            self.subdomain_vists[subdomain] = time.time()
+                    time.sleep(max(sleep, 0.5))
+            with self.locktime:
+                self.subdomain_vists[subdomain] = time.time()

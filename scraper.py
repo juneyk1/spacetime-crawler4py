@@ -77,6 +77,9 @@ def extract_next_links(url, resp):
             if(status.is_large_file(resp)):
                 return []
             
+            if status.detect_url_trap(url):
+                return []
+            
             # Parse content
             soup = BeautifulSoup(resp.raw_response.content, 'lxml')
             
@@ -121,7 +124,7 @@ def extract_next_links(url, resp):
                 # Update word frequencies (Question 3) - use filtered words
                 with lock_word_counter:
                     word_counter.update(filtered_words)
-                    content_tracker.add_page(url, filtered_words)
+                content_tracker.add_page(url, filtered_words)
             
             # Extract links
             for link in soup.find_all('a', href=True):
@@ -129,7 +132,7 @@ def extract_next_links(url, resp):
                 base, fragment = urldefrag(abs_link)
                 cleaned_url = status.remove_traps(base)
                 normalized = urlparse(cleaned_url).geturl().lower()
-                if is_valid(normalized) and normalized not in links and normalized not in all_urls:
+                if is_valid(normalized) and normalized not in links and normalized not in all_urls and not status.detect_url_trap(normalized):
                     with lock_links:
                         links.append(normalized)
                     
@@ -196,13 +199,14 @@ def is_valid(url):
         if parsed.scheme not in {'http', 'https'}:
             return False
 
-        if not any(domain in parsed.netloc for domain in [
-            "ics.uci.edu", 
-            "cs.uci.edu", 
-            "informatics.uci.edu", 
-            "stat.uci.edu"
-        ]):
-            return False
+        domain = parsed.netloc
+        if "today.uci.edu" in parsed.netloc:
+            if not parsed.path.startswith("/department/information_computer_sciences/"):
+                return False
+        else:
+            valid_domains = ["ics.uci.edu", "cs.uci.edu", "informatics.uci.edu", "stat.uci.edu"]
+            if not any(parsed.netloc.endswith(d) for d in valid_domains):
+                return False
 
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
@@ -212,7 +216,8 @@ def is_valid(url):
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz|java)$", parsed.path.lower())
+            + r"|rm|smil|wmv|swf|wma|zip|rar|gz|java"
+            + r"|bam)$", parsed.path.lower())
 
     except TypeError:
         print("TypeError on ", parsed)
