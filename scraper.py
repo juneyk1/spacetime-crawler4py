@@ -182,7 +182,7 @@ def save_report_data():
             writer.writerow([''])
             
             # Question 4: Subdomain Analysis
-            writer.writerow(['Subdomains Found in ics.uci.edu'])
+            writer.writerow(['Subdomains Found in uci.edu'])
             writer.writerow(['Subdomain', 'Page Count'])
             for subdomain, count in sorted(subdomain_counter.items()):
                 writer.writerow([subdomain, count])
