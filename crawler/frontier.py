@@ -17,6 +17,7 @@ class Frontier(object):
         self.lock = RLock()
         self.locktime = RLock()
         self.subdomain_vists = {}
+        self.subdomain_lock = {}
         self.stop_thread = Event()
         
         if not os.path.exists(self.config.save_file) and not restart:
@@ -83,10 +84,14 @@ class Frontier(object):
     def check_domain_time(self, url):
         subdomain = get_tld(url, as_object=True).subdomain
         with self.lock:
+            if subdomain not in self.subdomain_lock:
+                self.subdomain_lock[subdomain] = RLock()
+        
+        subdomain_lock = self.subdomain_lock[subdomain]
+        with subdomain_lock:
             if subdomain in self.subdomain_vists:
                 curr_time = time.time() - self.subdomain_vists[subdomain]
                 if curr_time < self.config.time_delay:
                     sleep = self.config.time_delay - curr_time
-                    time.sleep(max(sleep, 0.5))
-            with self.locktime:
-                self.subdomain_vists[subdomain] = time.time()
+                    time.sleep(sleep)
+            self.subdomain_vists[subdomain] = time.time()
