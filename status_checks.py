@@ -13,9 +13,9 @@ def remove_traps(base):
     parsed_base = urlparse(base)
     query_params = parse_qs(parsed_base.query)
     query_keys = list(query_params.keys())
-    to_del = ["rev", "version", "v", "year", "month", "day", "date", "tribe-bar-date", "filter[units]"]
+    to_del = ["rev", "rev2", "do", "version", "v", "year", "month", "day", "date", "tribe-bar-date", "filter[units]"]
     for param in query_keys:
-        if param in to_del or param.startswith("filter"):
+        if param in to_del or param.startswith("filter") or param.startswith("rev2"):
             del query_params[param]
 
     re_query = urlencode(query_params, doseq=True)
