@@ -33,7 +33,10 @@ def detect_url_trap(url):
     
     # calendar trap
         # ignore calendars
-    if re.search(r'/calendar/\d{4}/\d{2}/', path):
+    if (re.search(r'/calendar/\d{4}/\d{2}/', path) or 
+        re.search(r'/day/\d{4}-\d{2}-\d{1}', path) or 
+        re.search(r'/month/\d{4}-\d{2}', path) or 
+        re.search(r'/year/\d{4}', path)):
         return True
         
     # deep path
