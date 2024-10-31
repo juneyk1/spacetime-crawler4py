@@ -22,6 +22,7 @@ class Worker(Thread):
             tbd_url = self.frontier.get_tbd_url()
             if not tbd_url:
                 self.logger.info("Frontier is empty. Stopping Crawler.")
+                scraper.save_report_data()
                 break
             self.frontier.check_domain_time(tbd_url)
             resp = download(tbd_url, self.config, self.logger)
