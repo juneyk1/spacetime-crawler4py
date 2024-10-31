@@ -205,7 +205,7 @@ def is_valid(url):
                 return False
         else:
             valid_domains = ["ics.uci.edu", "cs.uci.edu", "informatics.uci.edu", "stat.uci.edu"]
-            if not any(parsed.netloc.endswith(d) for d in valid_domains):
+            if not any(domain is d or domain.endswith("." + d) for d in valid_domains):
                 return False
 
         return not re.match(
@@ -217,7 +217,7 @@ def is_valid(url):
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
             + r"|rm|smil|wmv|swf|wma|zip|rar|gz|java"
-            + r"|bam)$", parsed.path.lower())
+            + r"|bam|lif)$", parsed.path.lower())
 
     except TypeError:
         print("TypeError on ", parsed)
