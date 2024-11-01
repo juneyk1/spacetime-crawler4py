@@ -38,7 +38,6 @@ def detect_url_trap(url):
         re.search(r'/day/\d{4}-\d{2}-\d{2}', path) or
         re.search(r'/month/\d{4}-\d{2}', path) or
         re.search(r'/year/\d{4}', path) or
-        re.search(r'/\d{4}/\d{2}/\d{2}', path) or
         re.search(r'/events/\d{4}/\d{2}/\d{2}', path) or
         re.search(r'/date/\d{4}-\d{2}-\d{2}', path) or
         re.search(r'/event/\d{4}/\d{2}', path) or 
