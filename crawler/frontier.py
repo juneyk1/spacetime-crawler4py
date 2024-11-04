@@ -1,8 +1,10 @@
 import os
 import shelve
+import time
 
-from threading import Thread, RLock
+from threading import Thread, RLock, Event
 from queue import Queue, Empty
+from tld import get_tld
 
 from utils import get_logger, get_urlhash, normalize
 from scraper import is_valid
@@ -12,6 +14,11 @@ class Frontier(object):
         self.logger = get_logger("FRONTIER")
         self.config = config
         self.to_be_downloaded = list()
+        self.lock = RLock()
+        self.locktime = RLock()
+        self.subdomain_vists = {}
+        self.subdomain_lock = {}
+        self.stop_thread = Event()
         
         if not os.path.exists(self.config.save_file) and not restart:
             # Save file does not exist, but request to load save.
@@ -48,25 +55,43 @@ class Frontier(object):
             f"total urls discovered.")
 
     def get_tbd_url(self):
-        try:
-            return self.to_be_downloaded.pop()
-        except IndexError:
-            return None
+        with self.lock:
+            try:
+                return self.to_be_downloaded.pop()
+            except IndexError:
+                return None
 
     def add_url(self, url):
         url = normalize(url)
         urlhash = get_urlhash(url)
-        if urlhash not in self.save:
-            self.save[urlhash] = (url, False)
-            self.save.sync()
-            self.to_be_downloaded.append(url)
+        with self.lock:
+            if urlhash not in self.save:
+                self.save[urlhash] = (url, False)
+                self.save.sync()
+                self.to_be_downloaded.append(url)
     
     def mark_url_complete(self, url):
         urlhash = get_urlhash(url)
-        if urlhash not in self.save:
-            # This should not happen.
-            self.logger.error(
-                f"Completed url {url}, but have not seen it before.")
+        with self.lock:
+            if urlhash not in self.save:
+                # This should not happen.
+                self.logger.error(
+                    f"Completed url {url}, but have not seen it before.")
 
-        self.save[urlhash] = (url, True)
-        self.save.sync()
+            self.save[urlhash] = (url, True)
+            self.save.sync()
+
+    def check_domain_time(self, url):
+        subdomain = get_tld(url, as_object=True).subdomain
+        with self.lock:
+            if subdomain not in self.subdomain_lock:
+                self.subdomain_lock[subdomain] = RLock()
+        
+        subdomain_lock = self.subdomain_lock[subdomain]
+        with subdomain_lock:
+            if subdomain in self.subdomain_vists:
+                curr_time = time.time() - self.subdomain_vists[subdomain]
+                if curr_time < self.config.time_delay:
+                    sleep = self.config.time_delay - curr_time
+                    time.sleep(sleep)
+            self.subdomain_vists[subdomain] = time.time()
